@@ -1,28 +1,48 @@
 ﻿import ogs from "open-graph-scraper";
 
-type Data = User | Group | Comment | Post
+type Data = User | Group | Comment | Post | List
+
+export enum Kind {
+    List = "Listing",
+    User = "t2",
+    Group = "t5",
+    Comment = "t1",
+    Post = "t3"
+}
 
 export class Everything<T extends Data> {
+    public static list(list: List) : Everything<List> {
+        return new Everything(Kind.List, Object.assign(new List(), list))
+    }
     public static user(user: User) : Everything<User> {
-        return new Everything("t2", Object.assign(new User(), user)
+        return new Everything(Kind.User, Object.assign(new User(), user)
         )
     }
     public static group(group: Group) : Everything<Group> {
-        return new Everything("t5", Object.assign(new Group(), group))
+        return new Everything(Kind.Group, Object.assign(new Group(), group))
     }
     public static comment(comment: Comment) : Everything<Comment> {
-        return new Everything("t1", Object.assign(new Comment(), comment))
+        return new Everything(Kind.Comment, Object.assign(new Comment(), comment))
     }
     public static post(post: Post) : Everything<Post> {
-        return new Everything("t3", Object.assign(new Post(), post))
+        return new Everything(Kind.Post, Object.assign(new Post(), post))
     }
-    private constructor(kind: string, data: T) {
+    private constructor(kind: Kind, data: T) {
         this.kind = kind
         this.data = data
     }
 
-    readonly kind: string
+    readonly kind: Kind
     readonly data: T
+}
+
+export class List {
+    after?: string | null = null;
+    dist?: number = 0;
+    modhash?: string = '';
+    geo_filter?: null = null;
+    children?: (Everything<Data>)[] = [];
+    before?: string | null = null;
 }
 
 export abstract class GroupBase {

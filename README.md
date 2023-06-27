@@ -22,7 +22,7 @@ To install the Everything SDK, use the following command: `npm install everythin
 
 ## Contributing
 
-Contributions are welcome! If you would like to contribute to Everything, please follow the guidelines outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome! If you would like to contribute to Everything SDK, please follow the guidelines outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
