@@ -1,9 +1,10 @@
 ﻿import ogs from "open-graph-scraper";
 
-type Data = User | Group | Comment | Post | List
+type Data = User | Group | Comment | Post | List | MoreComments
 
 export enum Kind {
     List = "Listing",
+    MoreComments = "more",
     User = "t2",
     Group = "t5",
     Comment = "t1",
@@ -12,20 +13,25 @@ export enum Kind {
 
 export class Everything<T extends Data> {
     public static list(list: List) : Everything<List> {
-        return new Everything(Kind.List, Object.assign(new List(), list))
+        return new Everything(Kind.List, assign(new List(), list))
+    }
+    public static moreComments(moreComments: MoreComments) : Everything<MoreComments> {
+        return new Everything(Kind.MoreComments, assign(new MoreComments(), moreComments))
     }
     public static user(user: User) : Everything<User> {
-        return new Everything(Kind.User, Object.assign(new User(), user)
-        )
+        if (user.subreddit) {
+            user.subreddit = assign(new Subreddit(), user.subreddit)
+        }
+        return new Everything(Kind.User, assign(new User(), user))
     }
     public static group(group: Group) : Everything<Group> {
-        return new Everything(Kind.Group, Object.assign(new Group(), group))
+        return new Everything(Kind.Group, assign(new Group(), group))
     }
     public static comment(comment: Comment) : Everything<Comment> {
-        return new Everything(Kind.Comment, Object.assign(new Comment(), comment))
+        return new Everything(Kind.Comment, assign(new Comment(), comment))
     }
     public static post(post: Post) : Everything<Post> {
-        return new Everything(Kind.Post, Object.assign(new Post(), post))
+        return new Everything(Kind.Post, assign(new Post(), post))
     }
     private constructor(kind: Kind, data: T) {
         this.kind = kind
@@ -38,11 +44,20 @@ export class Everything<T extends Data> {
 
 export class List {
     after?: string | null = null;
-    dist?: number = 0;
+    dist?: number | null = null;
     modhash?: string = '';
     geo_filter?: null = null;
     children?: (Everything<Data>)[] = [];
     before?: string | null = null;
+}
+
+export class MoreComments {
+    count: number = 0;
+    name: string = '';
+    id: string = '';
+    parent_id: string = '';
+    depth: number = 0
+    children: Array<string> = []
 }
 
 export abstract class GroupBase {
@@ -60,7 +75,7 @@ export abstract class GroupBase {
     subscribers?: number = 0;
     name?: string = '';
     quarantine?: boolean = false;
-    public_description?: string = '';
+    public_description: string = '';
     community_icon?: string = '';
     header_size?: (number)[] | null = null;
     key_color?: string = '';
@@ -380,4 +395,16 @@ export class Comment extends PostBase {
     controversiality?: number = 0;
     depth?: number = 0;
     collapsed_because_crowd_control?: null = null;
+}
+
+function assign<T extends Data>(target: T, ...sources: T[]) {
+    for (const source of sources) {
+        for (const key of Object.keys(source)) {
+            const val = source[key as keyof T];
+            if (val !== undefined) {
+                target[key as keyof T] = val;
+            }
+        }
+    }
+    return target;
 }
