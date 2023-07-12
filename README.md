@@ -8,6 +8,13 @@ The Everything SDK provides a set of defining types for building applications or
 
 The Everything SDK includes the following defining types:
 
+### Service
+
+- **IService**: The interface for services to implement, enabling comaptibility with the Everything API. 
+
+### Everything
+
+- **List**: Represents a list of the Everything type.
 - **Everything**: A general container for the following types:
 - **Group**: Represents a group in the Everything system.
 - **User**: Represents a user in the Everything system.
