@@ -11,7 +11,7 @@ export enum Kind {
     Post = "t3"
 }
 
-export class Everything<T extends Data> {
+export class Everything<T extends Data = Data> {
     public static list<T extends Data = Data>(list: List<T>) : Everything<List<T>> {
         return new Everything(Kind.List, assign(new List<T>(), list))
     }
@@ -49,6 +49,33 @@ export class List<T extends Data = Data> {
     geo_filter?: null = null;
     children?: (Everything<T>)[] = [];
     before?: string | null = null;
+
+    static isGroup(everything: Everything): everything is Everything<Group> {
+        return everything.data instanceof Group
+    }
+
+    toAutocompleteV1?(): AutocompleteV1 {
+        return {
+            subreddits: (this.children ?? [] as Array<Everything>).filter(List.isGroup).map((group: Everything<Group>) => ({
+                numSubscribers: group.data.subscribers ?? 0,
+                name: group.data.display_name ?? '',
+                id: group.data.name ?? '',
+                primaryColor: group.data.primary_color ?? '',
+                communityIcon: group.data.community_icon ?? '',
+                icon: group.data.icon_img ?? '',
+                allowedPostTypes: {
+                    images: group.data.allow_images ?? true,
+                    //TODO: Figure out where this is set
+                    text: true,
+                    videos: group.data.allow_videos ?? true,
+                    //TODO: Figure out where this is set
+                    links: true,
+                    //TODO: Is this correct?
+                    spoilers: group.data.spoilers_enabled ?? true
+                }
+            })) ?? []
+        }
+    }
 }
 
 export class MoreComments {
@@ -397,6 +424,25 @@ export class Comment extends PostBase {
     collapsed_because_crowd_control?: null = null;
 }
 
+export class AutocompleteV1 {
+    subreddits: (AutocompleteV1Subreddit)[] = [];
+}
+export class AutocompleteV1Subreddit {
+    numSubscribers: number = 0;
+    name: string = '';
+    allowedPostTypes: AllowedPostTypes = new AllowedPostTypes();
+    id: string = '';
+    primaryColor: string = '';
+    communityIcon: string = '';
+    icon: string = '';
+}
+export class AllowedPostTypes {
+    images: boolean = true;
+    text: boolean = true;
+    videos: boolean = true;
+    links: boolean = true;
+    spoilers: boolean = true;
+}
 
 function assign<T extends Data>(target: T, ...sources: T[]) {
     for (const source of sources) {
