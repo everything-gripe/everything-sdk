@@ -1,4 +1,4 @@
-﻿import {Everything, Group, List, Post, User, Comment} from "./everything";
+﻿import {EverythingData, Group, List, Post, User, Comment} from "./everything";
 
 export enum UserDetail {
     Overview = 'overview',
@@ -11,6 +11,12 @@ export enum UserDetail {
     Gilded = 'gilded',
 }
 
+export enum SearchType {
+    Group = 'sr',
+    Post = 'link',
+    User = 'user'
+}
+
 export class Unimplemented {
     readonly status: number = 400
     readonly message: string = 'Not Implemented'
@@ -18,74 +24,91 @@ export class Unimplemented {
 
 export type Result<T> = T | Unimplemented;
 
-export type GetGroupResult = Result<Everything<Group>>;
+export type GetGroupResult = Result<EverythingData<Group>>;
 
-export type GetPostResult = Result<Everything<Post>>;
+export type GetPostResult = Result<EverythingData<Post>>;
 
-export type GetUserResult = Result<Everything<User>>;
+export type GetUserResult = Result<EverythingData<User>>;
 
-export type GetPostsResult = Result<Everything<List<Post>>>;
+export type GetPostsResult = Result<EverythingData<List<Post>>>;
 
-export type GetUserDetailsResult = Result<Everything<List<Post | Comment>>>;
+export type GetUserDetailsResult = Result<EverythingData<List<Post | Comment>>>;
 
-export type GetNestedCommentsResult = Result<Array<Everything<List>>>;
+export type GetNestedCommentsResult = Result<Array<EverythingData<List>>>;
 
-export type GetGroupsQueryResult = Result<Everything<List>>;
+export type AutocompleteResult = Result<EverythingData<List>>;
 
-interface GroupOptions {
-    subreddit: string
+export type SearchResult = Result<EverythingData<List>>
+
+export type Id = string;
+export type Name = string;
+export type Limit = number;
+export type Page = string;
+export type Sort = string;
+export type Depth = number;
+export type Query = string;
+
+export interface GetGroupOptions {
+    group: Name
 }
 
-interface UserOptions {
-    username: string
+export interface GetPostOptions {
+    group: Name
+    id: Id
 }
 
-interface LimitableOptions {
-    limit: number,
+export interface GetUserOptions {
+    username: Name
 }
 
-interface ListOptions extends LimitableOptions {
-    sort?: string,
-    secondarySort?: string,
+export interface GetPostsOptions {
+    group: Name
+    limit: Limit,
+    page?: Page,
+    sort?: Sort,
+    secondarySort?: Sort,
 }
 
-interface CommentListOptions extends DepthListOptions, LimitableOptions {
-    sort?: string
-}
-
-interface PageListOptions extends ListOptions {
-    page?: string,
-}
-
-interface DepthListOptions {
-    depth?: number
-}
-
-export interface GetGroupOptions extends GroupOptions {}
-
-export interface GetPostOptions extends GroupOptions {
-    id: string
-}
-
-export interface GetUserOptions extends UserOptions {}
-
-export interface GetPostsOptions extends PageListOptions, GroupOptions {}
-
-export interface GetUserDetailsOptions extends PageListOptions, UserOptions {
-    userDetail?: UserDetail
+export interface GetUserDetailsOptions {
+    username: Name,
+    limit: Limit,
+    page?: Page,
+    userDetail: UserDetail
+    sort?: Sort,
+    secondarySort?: Sort,
 }
 
 export interface CommentIds {
-    postId: string,
-    commentId?: string
+    postId: Id,
+    commentId?: Id
 }
 
-export interface GetNestedCommentsOptions extends CommentListOptions, GroupOptions {
+export interface GetNestedCommentsOptions {
+    group: Name
     ids: CommentIds
+    limit: Limit,
+    sort?: Sort,
+    secondarySort?: Sort,
+    depth?: Depth
 }
 
-export interface GetGroupsQuery extends LimitableOptions{
-    query: string
+export interface AutocompleteOptions {
+    query: Query,
+    limit: Limit,
+    includeOver18?: boolean,
+    searchType: SearchType.Group | [SearchType.Group, SearchType.User]
+}
+
+export interface SearchOptions {
+    group?: Name,
+    query: Query,
+    exact?: boolean
+    limit: Limit,
+    page?: Page,
+    sort?: Sort,
+    secondarySort?: Sort,
+    searchType: SearchType | Array<SearchType>
+    searchInGroup: boolean
 }
 
 export interface IService {
@@ -95,5 +118,6 @@ export interface IService {
     getPosts(getPostsOptions: GetPostsOptions): Promise<GetPostsResult>
     getUserDetails(getUserDetailsOptions: GetUserDetailsOptions): Promise<GetUserDetailsResult>
     getNestedComments(getNestedCommentOptions: GetNestedCommentsOptions): Promise<GetNestedCommentsResult>
-    getGroupsQuery(getGroupsQuery: GetGroupsQuery): Promise<GetGroupsQueryResult>
+    autocomplete(autocompleteOptions: AutocompleteOptions): Promise<AutocompleteResult>
+    search(searchOptions: SearchOptions): Promise<SearchResult>
 }

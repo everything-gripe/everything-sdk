@@ -1,6 +1,10 @@
 ﻿import ogs from "open-graph-scraper";
+import {Converter} from "showdown";
+import {TypedProxy} from "./util"
 
 export type Data = User | Group | Comment | Post | List | MoreComments
+export type ListData<T extends Data> = List<T> & Data
+export type EverythingData<T extends Data = Data> = Everything<Required<T>> & Required<T>
 
 export enum Kind {
     List = "Listing",
@@ -11,35 +15,136 @@ export enum Kind {
     Post = "t3"
 }
 
+type Required<T> = {
+    [P in keyof T]-?: T[P];
+};
+
+type MarkdownText = string
+type MarkdownHtml = string
+type MarkdownFieldTypes = string;
+type Markdown<T extends MarkdownFieldTypes, TData extends Data> = MarkdownBase<T, TData> & {
+    [K in T]?: MarkdownText
+} & {
+    [K in `${T}_html`]?: MarkdownHtml | null;
+}
+
+abstract class MarkdownBase<T extends MarkdownFieldTypes, TData extends Data> {
+    abstract readonly markdownFields?: ReadonlyArray<T>
+
+    isKey?(key: keyof this | any): key is keyof this {
+        return key in this
+    }
+
+    isMarkdown?(value: any): value is MarkdownText | MarkdownHtml {
+        return typeof value === 'string'
+    }
+
+    buildMarkdown?(buildMarkdown: (markdownField: keyof this, markdownFieldHtml: keyof this) => void) {
+        return () => {
+            for (const markdownField of this.markdownFields!) {
+                const markdownFieldHtml = `${markdownField}_html`
+                if (!this.isKey!(markdownFieldHtml) || !this.isKey!(markdownField)) continue;
+
+                buildMarkdown(markdownField, markdownFieldHtml)
+            }
+
+            return new Return.Parent<TData>()
+        }
+    }
+
+    buildHtmlFromMarkdown? =
+        this.buildMarkdown!((markdownField, markdownFieldHtml) => {
+            const markdownText = this[markdownField]
+            if (!this.isMarkdown!(markdownText)) return;
+
+            this[markdownFieldHtml] = new Converter().makeHtml(markdownText) as any
+        })
+
+    buildMarkdownFromHtml? =
+        this.buildMarkdown!((markdownField, markdownFieldHtml)=> {
+            const markdownHtml = this[markdownFieldHtml]
+            if (!this.isMarkdown!(markdownHtml)) return;
+
+            this[markdownField] = new Converter().makeMarkdown(markdownHtml) as any
+        })
+}
+
+//Hack for elevated return of `this`
+class Return {
+    static Parent: {
+        new<T extends Data> (): EverythingData<T>
+    } = Return as any
+}
+
 export class Everything<T extends Data = Data> {
-    public static list<T extends Data = Data>(list: List<T>) : Everything<List<T>> {
-        return new Everything(Kind.List, assign(new List<T>(), list))
+    public static list<T extends Data = Data>(list: List<T>) {
+        return new Everything.Constructor(Kind.List, assign<ListData<T>>(new List<T>(), list))
     }
-    public static moreComments(moreComments: MoreComments) : Everything<MoreComments> {
-        return new Everything(Kind.MoreComments, assign(new MoreComments(), moreComments))
+    public static moreComments(moreComments: MoreComments) {
+        return new Everything.Constructor(Kind.MoreComments, assign(new MoreComments(), moreComments))
     }
-    public static user(user: User) : Everything<User> {
+    public static user(user: User) {
         if (user.subreddit) {
             user.subreddit = assign(new Subreddit(), user.subreddit)
         }
-        return new Everything(Kind.User, assign(new User(), user))
+        return new Everything.Constructor(Kind.User, assign(new User(), user))
     }
-    public static group(group: Group) : Everything<Group> {
-        return new Everything(Kind.Group, assign(new Group(), group))
+    public static group(group: Group) {
+        return new Everything.Constructor(Kind.Group, assign(new Group(), group))
     }
-    public static comment(comment: Comment) : Everything<Comment> {
-        return new Everything(Kind.Comment, assign(new Comment(), comment))
+    public static comment(comment: Comment) {
+        return new Everything.Constructor(Kind.Comment, assign(new Comment(), comment))
     }
-    public static post(post: Post) : Everything<Post> {
-        return new Everything(Kind.Post, assign(new Post(), post))
+    public static post(post: Post) {
+        return new Everything.Constructor(Kind.Post, assign(new Post(), post))
     }
-    private constructor(kind: Kind, data: T) {
+
+    // public isKey(key: keyof (typeof this & T)): key is keyof typeof this {
+    //     return key in this
+    // }
+    //
+    // public isDataKey(key: keyof (typeof this & T)): key is keyof T {
+    //     return key in this.data
+    // }
+
+    private static Constructor: {
+        new<T extends Data = Data>(kind: Kind, data: Required<T>): EverythingData<T>
+    } = Everything as any
+
+    constructor(kind: Kind, data: Required<T>) {
         this.kind = kind
         this.data = data
+
+        const proxy = new TypedProxy<typeof this, typeof this & T>(this, {
+            get: (target, prop) => {
+                //TODO: Preferred method if we can get it to work.
+                // if (target.isKey(prop)) {
+                //     return target[prop];
+                // }
+                // if (target.isDataKey(prop)) {
+                //     return target.data[prop]
+                // }
+
+                const value = {...target.data, ...target}[prop]
+                type valueType = typeof value
+                if (typeof value === 'function') {
+                    return ((...args: any) => {
+                        const resultReturn = (result: any) => result instanceof Return ? proxy : result
+
+                        const result = value(...args)
+                        return result instanceof Promise
+                            ? result.then(resultReturn)
+                            : resultReturn(result)
+                    }) as valueType
+                }
+                return value;
+            }
+        })
+        return proxy
     }
 
     readonly kind: Kind
-    readonly data: T
+    readonly data: Required<T>
 }
 
 export class List<T extends Data = Data> {
@@ -47,16 +152,18 @@ export class List<T extends Data = Data> {
     dist?: number | null = null;
     modhash?: string = '';
     geo_filter?: null = null;
-    children?: (Everything<T>)[] = [];
+    children?: (EverythingData<T>)[] = [];
     before?: string | null = null;
 
-    static isGroup(everything: Everything): everything is Everything<Group> {
-        return everything.data instanceof Group
+    static isGroup(everything: EverythingData): everything is EverythingData<Group> {
+        //TODO: Ensure this works AND is the best way to go about it.
+        return everything.data as any instanceof Group
     }
 
     toAutocompleteV1?(): AutocompleteV1 {
         return {
-            subreddits: (this.children ?? [] as Array<Everything>).filter(List.isGroup).map((group: Everything<Group>) => ({
+            //TODO: Figure out a better way to go about this.
+            subreddits: (this.children! as unknown as Array<EverythingData>).filter(List.isGroup).map((group: EverythingData<Group>) => ({
                 numSubscribers: group.data.subscribers ?? 0,
                 name: group.data.display_name ?? '',
                 id: group.data.name ?? '',
@@ -64,16 +171,16 @@ export class List<T extends Data = Data> {
                 communityIcon: group.data.community_icon ?? '',
                 icon: group.data.icon_img ?? '',
                 allowedPostTypes: {
-                    images: group.data.allow_images ?? true,
+                    images: group.data.allow_images ?? false,
                     //TODO: Figure out where this is set
                     text: true,
-                    videos: group.data.allow_videos ?? true,
+                    videos: group.data.allow_videos ?? false,
                     //TODO: Figure out where this is set
                     links: true,
                     //TODO: Is this correct?
-                    spoilers: group.data.spoilers_enabled ?? true
+                    spoilers: group.data.spoilers_enabled ?? false
                 }
-            })) ?? []
+            }))
         }
     }
 }
@@ -87,7 +194,7 @@ export class MoreComments {
     children: Array<string> = []
 }
 
-export abstract class GroupBase {
+export abstract class GroupBase<T extends MarkdownFieldTypes, TData extends Data> extends MarkdownBase<T, TData>{
     restrict_posting?: boolean = false;
     user_is_banned?: null = null;
     free_form_reports?: boolean = false;
@@ -102,7 +209,7 @@ export abstract class GroupBase {
     subscribers?: number = 0;
     name?: string = '';
     quarantine?: boolean = false;
-    public_description?: string = '';
+    public_description?: MarkdownText = '';
     community_icon?: string = '';
     header_size?: (number)[] | null = null;
     key_color?: string = '';
@@ -117,16 +224,22 @@ export abstract class GroupBase {
     banner_img?: string = '';
     show_media?: boolean = false;
     user_is_moderator?: null = null;
-    description?: string = '';
+    description?: MarkdownText = '';
     submit_link_label?: string = '';
     restrict_commenting?: boolean = false;
     url?: string = '';
     banner_size?: null = null;
     user_is_contributor?: null = null;
 }
-export class Group extends GroupBase {
+
+const GroupMarkdownFields = ['submit_text', 'description', 'public_description'] as const
+type GroupMarkdownFieldTypes = typeof GroupMarkdownFields[number]
+
+export class Group extends GroupBase<GroupMarkdownFieldTypes, Group> implements Markdown<GroupMarkdownFieldTypes, Group> {
+    readonly markdownFields? = GroupMarkdownFields
+
     user_flair_background_color?: null = null;
-    submit_text_html?: string = '';
+    submit_text_html?: MarkdownHtml = '';
     wiki_enabled?: boolean = false;
     user_can_flair_in_sr?: null = null;
     allow_galleries?: boolean = false;
@@ -146,8 +259,8 @@ export class Group extends GroupBase {
     banner_background_image?: string = '';
     original_content_tag_enabled?: boolean = false;
     community_reviewed?: boolean = false;
-    submit_text?: string = '';
-    description_html?: string = '';
+    submit_text?: MarkdownText = '';
+    description_html?: MarkdownHtml = '';
     spoilers_enabled?: boolean = false;
     comment_contribution_settings?: CommentContributionSettings = new CommentContributionSettings();
     allow_talks?: boolean = false;
@@ -166,7 +279,7 @@ export class Group extends GroupBase {
     allow_polls?: boolean = false;
     collapse_deleted_comments?: boolean = false;
     emojis_custom_size?: null = null;
-    public_description_html?: string = '';
+    public_description_html?: MarkdownHtml = '';
     allow_videos?: boolean = false;
     is_crosspostable_subreddit?: boolean = false;
     notification_level?: null = null;
@@ -224,7 +337,11 @@ export class User {
     accept_followers?: boolean = false;
     has_subscribed?: boolean = false;
 }
-export class Subreddit extends GroupBase {
+
+
+export class Subreddit extends GroupBase<MarkdownFieldTypes, Subreddit> {
+    readonly markdownFields? = [] as const
+
     default_set?: boolean = false;
     icon_color?: string = '';
     previous_names?: (null)[] | null = null;
@@ -232,7 +349,8 @@ export class Subreddit extends GroupBase {
     is_default_icon?: boolean = false;
     is_default_banner?: boolean = false;
 }
-export abstract class PostBase {
+
+export abstract class PostBase<T extends MarkdownFieldTypes, TData extends Data> extends MarkdownBase<T, TData> {
     approved_at_utc?: null = null;
     subreddit?: string = '';
     user_reports?: (null)[] = [];
@@ -290,8 +408,13 @@ export abstract class PostBase {
     media_metadata?: (null)[];
 }
 
-export class Post extends PostBase {
-    selftext?: string = '';
+const PostMarkdownFields = ['selftext'] as const
+type PostMarkdownFieldTypes = typeof PostMarkdownFields[number]
+
+export class Post extends PostBase<PostMarkdownFieldTypes, Post> implements Markdown<PostMarkdownFieldTypes, Post> {
+    readonly markdownFields? = PostMarkdownFields
+
+    selftext?: MarkdownText = '';
     clicked?: boolean = false;
     title?: string = '';
     link_flair_richtext?: (LinkFlairRichtextEntity)[] = [];
@@ -323,7 +446,7 @@ export class Post extends PostBase {
     removed_by_category?: null = null;
     domain?: string = '';
     allow_live_comments?: boolean = false;
-    selftext_html?: string | null = null;
+    selftext_html?: MarkdownHtml | null = null;
     suggested_sort?: string | null = null;
     view_count?: null = null;
     is_crosspostable?: boolean = false;
@@ -348,7 +471,7 @@ export class Post extends PostBase {
     num_crossposts?: number = 0;
     is_video?: boolean = false;
 
-    async buildMetadata(): Promise<Post> {
+    buildMetadata = async () => {
         if (!this.is_self) {
             try {
                 const {result: metadata} = await ogs({url: this.url})
@@ -383,9 +506,12 @@ export class Post extends PostBase {
             } catch (e) {}
         }
 
-        return this
-    }
+        return new Return.Parent<Post>()
+    };
 }
+
+
+
 export class LinkFlairRichtextEntity {
     e?: string = '';
     t?: string = '';
@@ -405,15 +531,21 @@ export class ImageSource {
     width?: number = 0;
     height?: number = 0;
 }
-export class Comment extends PostBase {
+
+const CommentMarkdownFields = ['body'] as const
+type CommentMarkdownFieldTypes = typeof CommentMarkdownFields[number]
+
+export class Comment extends PostBase<CommentMarkdownFieldTypes, Comment> implements Markdown<CommentMarkdownFieldTypes, Comment>{
+    readonly markdownFields? = CommentMarkdownFields
+
     comment_type?: null = null;
-    replies?: Everything<List<Comment>> | string = '';
+    replies?: EverythingData<List<Comment>> | string = '';
     collapsed_reason_code?: null = null;
     parent_id?: string = '';
     collapsed?: boolean = false;
-    body?: string = '';
+    body?: MarkdownText = '';
     is_submitter?: boolean = false;
-    body_html?: string = '';
+    body_html?: MarkdownHtml = '';
     collapsed_reason?: null = null;
     associated_award?: null = null;
     unrepliable_reason?: null = null;
@@ -437,11 +569,11 @@ export class AutocompleteV1Subreddit {
     icon: string = '';
 }
 export class AllowedPostTypes {
-    images: boolean = true;
-    text: boolean = true;
-    videos: boolean = true;
-    links: boolean = true;
-    spoilers: boolean = true;
+    images: boolean = false;
+    text: boolean = false;
+    videos: boolean = false;
+    links: boolean = false;
+    spoilers: boolean = false;
 }
 
 function assign<T extends Data>(target: T, ...sources: T[]) {
@@ -453,5 +585,5 @@ function assign<T extends Data>(target: T, ...sources: T[]) {
             }
         }
     }
-    return target;
+    return target as Required<T>;
 }
