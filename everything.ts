@@ -471,10 +471,10 @@ export class Post extends PostBase<PostMarkdownFieldTypes, Post> implements Mark
     num_crossposts?: number = 0;
     is_video?: boolean = false;
 
-    buildMetadata = async () => {
+    buildMetadata = async ({headers}: {headers?: {}} = {}) => {
         if (!this.is_self) {
             try {
-                const {result: metadata} = await ogs({url: this.url})
+                const {result: metadata} = await ogs({url: this.url, fetchOptions: {headers}})
                 this.title ||= metadata.ogTitle || ''
 
                 if (metadata.ogImage?.length) {

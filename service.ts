@@ -22,6 +22,10 @@ export class Unimplemented {
     readonly message: string = 'Not Implemented'
 }
 
+export class ServiceOptions {
+    headers?: {}
+}
+
 export type Result<T> = T | Unimplemented;
 
 export type GetGroupResult = Result<EverythingData<Group>>;
@@ -95,6 +99,7 @@ export interface GetNestedCommentsOptions {
 export interface AutocompleteOptions {
     query: Query,
     limit: Limit,
+    exact?: boolean
     includeOver18?: boolean,
     searchType: SearchType.Group | [SearchType.Group, SearchType.User]
 }
@@ -102,16 +107,16 @@ export interface AutocompleteOptions {
 export interface SearchOptions {
     group?: Name,
     query: Query,
-    exact?: boolean
     limit: Limit,
     page?: Page,
     sort?: Sort,
     secondarySort?: Sort,
     searchType: SearchType | Array<SearchType>
-    searchInGroup: boolean
+    searchInGroup?: boolean
 }
 
 export interface IService {
+    init(options?: ServiceOptions): IService
     getGroup(getGroupOptions: GetGroupOptions): Promise<GetGroupResult>
     getPost(getPostOptions: GetPostOptions): Promise<GetPostResult>
     getUser(getUserOptions: GetUserOptions): Promise<GetUserResult>

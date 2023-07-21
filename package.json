@@ -1,6 +1,6 @@
 {
   "name": "everything-sdk",
-  "version": "0.7.28",
+  "version": "0.8.2",
   "description": "Simplify integration with the Everything middleware using the Everything SDK. Streamline development and enhance app capabilities with defining types for Groups, Users, Posts, and Comments.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
